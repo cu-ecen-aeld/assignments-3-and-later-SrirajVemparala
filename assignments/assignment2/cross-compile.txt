@@ -1,0 +1,5 @@
+aarch64-none-linux-gnu-gcc
+Version:10.2.1 20201103
+Configuration: /tmp/dgboter/bbs/build04--cen7x86_64/buildbot/cen7x86_64--aarch64-none-linux-gnu/build/src/gcc/configure
+Sysroot Path: /home/vsrlinux/install-lnx/gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu/bin/../aarch64-none-linux-gnu/libc
+
