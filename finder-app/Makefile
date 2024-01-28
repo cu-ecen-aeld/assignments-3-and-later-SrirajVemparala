@@ -1,4 +1,4 @@
-COMPILER ?= $(CROSS_COMPILER)gcc
+CC = $(CROSS_COMPILE)gcc
 
 FLAGS = -Wall -Werror
 
@@ -6,10 +6,10 @@ FLAGS = -Wall -Werror
 all: writer
 
 writer: writer_o
-	$(COMPILER) $(FLAGS) writer.o -o writer
+	$(CC) $(FLAGS) writer.o -o writer
 
 writer_o:
-	$(COMPILER) $(FLAGS) -c writer.c -o writer.o
+	$(CC) $(FLAGS) -c writer.c -o writer.o
 
 .PHONY: clean
 clean: 
