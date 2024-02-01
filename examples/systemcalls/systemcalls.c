@@ -1,5 +1,8 @@
 #include "systemcalls.h"
-
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -16,7 +19,12 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
+    int ret_val;
+    ret_val = system(cmd);
+	if(ret_val == -1)
+	{
+	  return false;
+	}
     return true;
 }
 
@@ -47,7 +55,30 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+	command[count] = command[count];
+	int pid = fork();
+	int wait_status;
+	if(pid == -1)
+	{
+	 printf("Child process is not created sucessfully");
+	 return false;
+	}
+	else if(!pid)
+	{
+	 int ret_exec;
+	 ret_exec = execv(command[0],command);
+	 if(ret_exec == -1)
+	 {
+	  printf("Execv failed");
+	  return false;
+	 } 
+	}
+	else
+	{
+	 pid = wait(&wait_status);
+	 printf("Wait completed");
+	}
+
 
 /*
  * TODO:
