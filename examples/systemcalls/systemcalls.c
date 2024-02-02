@@ -3,6 +3,12 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <string.h>
+#include <syslog.h>
+#include <libgen.h>
+#include <stdio.h>
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -56,30 +62,6 @@ bool do_exec(int count, ...)
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
 	command[count] = command[count];
-	int pid = fork();
-	int wait_status;
-	if(pid == -1)
-	{
-	 printf("Child process is not created sucessfully");
-	 return false;
-	}
-	else if(!pid)
-	{
-	 int ret_exec;
-	 ret_exec = execv(command[0],command);
-	 if(ret_exec == -1)
-	 {
-	  printf("Execv failed");
-	  return false;
-	 } 
-	}
-	else
-	{
-	 pid = wait(&wait_status);
-	 printf("Wait completed");
-	}
-
-
 /*
  * TODO:
  *   Execute a system command by calling fork, execv(),
@@ -89,7 +71,44 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-
+// Reference taken from Linux System Programming Textbook
+	pid_t pid = fork();
+	printf("ForkPID:%d\n",pid);
+	int wait_status;
+	int ret_exec = 0;
+	if(pid == -1)
+	{
+	 printf("Child process is not created sucessfully");
+	 return false;
+	}
+	else if(!pid)
+	{
+	 
+	 ret_exec = execv(command[0],command);
+	 if(ret_exec == -1)
+	 {
+	  printf("Execv failed\n");
+     	  exit(EXIT_FAILURE);
+	 } 
+	}
+	else
+	{
+	 //printf("BEPIDis: %d\n",pid);
+	 pid = wait(&wait_status);
+	 //printf("AFPIDis: %d\n",pid);
+        if (WIFEXITED(wait_status) == 1)
+         {
+         	if(WEXITSTATUS(wait_status) == 0)
+         	{
+            		printf("Command executed successfully\n");
+            	}
+         	else {
+            		printf("Command execution failed\n");
+            		return false;
+        	}
+        }
+	 
+	}
     va_end(args);
 
     return true;
@@ -123,7 +142,40 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
-
+pid_t pid;
+int ret_exec;
+int wait_status;
+int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+if (fd < 0) { perror("open"); abort(); }
+switch (pid = fork()) {
+  case -1: perror("fork"); abort();
+  case 0:
+    if (dup2(fd, 1) < 0) { perror("dup2"); abort(); }
+    close(fd);
+    ret_exec = execv(command[0],command);
+    if(ret_exec == -1)
+    {
+	  printf("Execv failed\n");
+     	  exit(EXIT_FAILURE);
+    } 
+  default:
+    close(fd);
+    pid = wait(&wait_status);
+	 //printf("AFPIDis: %d\n",pid);
+        if (WIFEXITED(wait_status) == 1)
+         {
+         	if(WEXITSTATUS(wait_status) == 0)
+         	{
+            		printf("Command executed successfully\n");
+            	}
+         	else {
+            		printf("Command execution failed\n");
+            		return false;
+        	}
+        }
+   }
+    /* do whatever the parent wants to do. */
+    
     va_end(args);
 
     return true;
