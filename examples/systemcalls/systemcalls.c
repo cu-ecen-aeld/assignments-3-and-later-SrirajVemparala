@@ -97,7 +97,7 @@ bool do_exec(int count, ...)
 	 pid = wait(&wait_status);
 	 //printf("AFPIDis: %d\n",pid);
         if (WIFEXITED(wait_status) == 1)
-         {
+        {
          	if(WEXITSTATUS(wait_status) == 0)
          	{
             		printf("Command executed successfully\n");
