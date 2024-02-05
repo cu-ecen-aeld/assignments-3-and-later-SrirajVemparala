@@ -1,3 +1,12 @@
+/*******************************************************************************
+ * systemcalls.c
+ * Date:        04-02-2024
+ * Author:      Raghu Sai Phani Sriraj Vemparala, raghu.vemparala@colorado.edu
+ * Description: This file has data related to writer script witten in C
+ * References: Linux System Programming Textbook
+ *
+ *
+ ******************************************************************************/
 #include "systemcalls.h"
 #include <stdlib.h>
 #include <unistd.h>
@@ -52,7 +61,7 @@ bool do_exec(int count, ...)
 {
     va_list args;
     va_start(args, count);
-    char * command[count+1];
+    char * command[count+1];//count+1 because the last value should be NULL
     int i;
     for(i=0; i<count; i++)
     {
@@ -72,8 +81,8 @@ bool do_exec(int count, ...)
  *
 */
 // Reference taken from Linux System Programming Textbook
-	pid_t pid = fork();
-	printf("ForkPID:%d\n",pid);
+	pid_t pid = fork();//Create child process
+	//printf("ForkPID:%d\n",pid);
 	int wait_status;
 	int ret_exec = 0;
 	if(pid == -1)
@@ -83,11 +92,12 @@ bool do_exec(int count, ...)
 	}
 	else if(!pid)
 	{
-	 
+	 //Ran by child process
 	 ret_exec = execv(command[0],command);
 	 if(ret_exec == -1)
 	 {
-	  printf("Execv failed\n");
+	  perror("Execv failed");
+	  //printf("Execv failed\n");
      	  exit(EXIT_FAILURE);
 	 } 
 	}
@@ -96,14 +106,15 @@ bool do_exec(int count, ...)
 	 //printf("BEPIDis: %d\n",pid);
 	 pid = wait(&wait_status);
 	 //printf("AFPIDis: %d\n",pid);
-        if (WIFEXITED(wait_status) == 1)
+        if (WIFEXITED(wait_status) == 1)//Check if exit call is called by the child process
         {
-         	if(WEXITSTATUS(wait_status) == 0)
+         	if(WEXITSTATUS(wait_status) == 0)//Check the value of the exit status. 
          	{
             		printf("Command executed successfully\n");
             	}
          	else {
-            		printf("Command execution failed\n");
+         		perror("Command_exec_failed");
+            		//printf("Command execution failed\n");
             		return false;
         	}
         }
@@ -123,7 +134,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 {
     va_list args;
     va_start(args, count);
-    char * command[count+1];
+    char * command[count+1];//count+1 because the last value should be NULL
     int i;
     for(i=0; i<count; i++)
     {
@@ -155,7 +166,8 @@ switch (pid = fork()) {
     ret_exec = execv(command[0],command);
     if(ret_exec == -1)
     {
-	  printf("Execv failed\n");
+    	  perror("Execv failed");
+	  //printf("Execv failed\n");
      	  exit(EXIT_FAILURE);
     } 
   default:
@@ -166,10 +178,12 @@ switch (pid = fork()) {
          {
          	if(WEXITSTATUS(wait_status) == 0)
          	{
+         		
             		printf("Command executed successfully\n");
             	}
          	else {
-            		printf("Command execution failed\n");
+         		perror("Command_exec_failed");
+            		//printf("Command execution failed\n");
             		return false;
         	}
         }
