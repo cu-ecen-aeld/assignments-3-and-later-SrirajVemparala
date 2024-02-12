@@ -1,3 +1,12 @@
+/*******************************************************************************
+ * threading.c
+ * Date:        11-02-2024
+ * Author:      Raghu Sai Phani Sriraj Vemparala, raghu.vemparala@colorado.edu
+ * Description: This file has data related to writer script witten in C
+ * References: Linux System Programming Textbook
+ *
+ *
+ ******************************************************************************/
 #include "threading.h"
 #include <unistd.h>
 #include <stdlib.h>
@@ -12,7 +21,9 @@
 void* threadfunc(void* thread_param)
 {
     struct thread_data* thread_func_args = (struct thread_data *)thread_param;
+    //sleep for sometime
     unsigned int sleepval = sleep((thread_func_args->wait_to_obtain_ms)/1000);
+    //If sleep time is not completed then raise error
     if(sleepval !=0)
     {
         ERROR_LOG("Sleep incomplete");
@@ -20,6 +31,7 @@ void* threadfunc(void* thread_param)
 
     }
     int lckval = pthread_mutex_lock(thread_func_args->mutex);
+    //If mutex is not taken successful trigger lock failed
     if(lckval !=0)
     {
         ERROR_LOG("Locking failed");
@@ -62,6 +74,7 @@ bool start_thread_obtaining_mutex(pthread_t *thread, pthread_mutex_t *mutex,int 
     new_data->wait_to_release_ms = wait_to_release_ms;
     new_data->thread_complete_success = false;
     int rc = pthread_create(thread, NULL,threadfunc,new_data);
+    //If thread creation failed trigger fault
     if(rc)
     {
         errno = rc;
