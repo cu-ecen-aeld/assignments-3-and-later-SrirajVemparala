@@ -136,21 +136,11 @@ int main(int argc, char* argv[])
     //Start of accepting the connections
     //
     //
+    
     while(1)
     {      
         //malloc performed
-        char *store_data = (char*)malloc(sizeof(char)*REC_LEN);
-        if(store_data == NULL)
-        {
-            syslog(LOG_ERR,"Unable to allocate memory");
-            printf("malloc failed\n");
-            exit(1);
-        }
-        else
-        {
-            syslog(LOG_DEBUG,"Successfully_created_file");
-            printf("malloc_succ\n");
-        }
+        char *store_data = NULL;
         sock_accept_fd = accept(sock_fd, (struct sockaddr *)&their_addr, &addr_size);
         if(sock_accept_fd == -1)
         {
@@ -162,7 +152,19 @@ int main(int argc, char* argv[])
         {
             printf("Accept done\n");
             accepted = 1;
-            syslog(LOG_INFO, "Accepts connection from %s", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
+                store_data = (char*)malloc(sizeof(char)*REC_LEN);
+                if(store_data == NULL)
+                {
+                    syslog(LOG_ERR,"Unable to allocate memory");
+                    printf("malloc failed\n");
+                    exit(1);
+                }
+                else
+                {
+                    syslog(LOG_DEBUG,"Successfully_created_file");
+                    printf("malloc_succ\n");
+                }
+                syslog(LOG_INFO, "Accepts connection from %s", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
         }
         int recv_len = 0;
         
