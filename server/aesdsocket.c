@@ -199,28 +199,30 @@ int main(int argc, char* argv[])
             }
             //i++;
             printf("i is:%d\n",i);
-            //printf("length_is:%d\n",total_length);
+            printf("length_is:%d\n",total_length);
             
-                if(REC_LEN - total_length >= i)
-                {
-                    memcpy(store_data+total_length,rec_val,i);   
-                }
-                else
-                {
-                    printf("SFERRRRRRRRRRRRRRRRRRRRRRRR\n");
-                    printf("i_val:%d\n",i);
-                    printf("tot+i:%d\n",total_length+i);
-                    //Handling                                      10 + 128
-                    char* store_data = (char*)realloc(store_data,total_length+i);
-                    memcpy(store_data+total_length,rec_val,recv_len);
-                }
+                // if(REC_LEN - total_length >= i)
+                // {
+                //     memcpy(store_data+total_length,rec_val,i);   
+                // }
+                // else
+                // {
+                    // printf("SFERRRRRRRRRRRRRRRRRRRRRRRR\n");
+                    // printf("i_val:%d\n",i);
+                    // printf("tot+i:%d\n",total_length+i);
+                    //Handling 
+                    //           01234
+                    //0th byte - abcdefgh                         10 + 128
+                    store_data = (char*)realloc(store_data,total_length+i);
+                    memcpy(store_data+total_length,rec_val,i);
+                //}
                 total_length+=i;
                 // for(int j = 0; j < total_length;j++)
                 // {
                 //     printf("data[%d]:%x\n",j,store_data[j]);
                 // }
                 
-                memset(rec_val,0,recv_len);
+            memset(rec_val,0,recv_len);
             if(recv_len !=0 && push_data == 1)
             {
                 //Tried Read, write but it did not work becasue once written teh pointer inth efile points to the last location and hence no data is read
@@ -300,8 +302,8 @@ int main(int argc, char* argv[])
                 }
                 data_sent_flag  = 0;
                 push_data = 0;
+                free(store_data);
                 close(file_fd);
-		        free(store_data);
 		        syslog(LOG_ERR, "Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
                 printf("Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
             }
