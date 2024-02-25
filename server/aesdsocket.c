@@ -55,6 +55,7 @@ int main(int argc, char* argv[])
     int accepted = 0, data_sent_flag = 0;
     int file_length = 0;
     int push_data = 0;
+    int daemon_flag = 0;
 
     const char* service = "9000";
     openlog("socket_check",LOG_PID, LOG_USER);
@@ -64,6 +65,10 @@ int main(int argc, char* argv[])
         {
             syslog(LOG_ERR, "daemon mode failed");
             exit(1);
+        }
+        else
+        {
+            daemon_flag = 1;
         }
     }
     /*
@@ -119,6 +124,53 @@ int main(int argc, char* argv[])
         exit(1);
     }
     freeaddrinfo(servinfo);
+    /*Referenced from CHAT Gpt with the question
+        How to make my process as a Daemon?*/
+    if(daemon_flag == 1)
+    {
+         pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        if (pid > 0) {
+            // Parent process - exit
+            exit(EXIT_SUCCESS);
+        }
+
+        // Create a new session
+        if (setsid() < 0) {
+            perror("setsid");
+            exit(EXIT_FAILURE);
+        }
+
+        // Fork second time
+        pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        if (pid > 0) {
+            // Parent process (first child) - exit
+            exit(EXIT_SUCCESS);
+        }
+
+        // Change working directory to root to avoid keeping
+        // any directory in use that could prevent unmounting
+        if (chdir("/") < 0) {
+            perror("chdir");
+            exit(EXIT_FAILURE);
+        }
+
+        // Redirect standard I/O to /dev/null
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+        open("/dev/null", O_RDONLY);
+        open("/dev/null", O_WRONLY);
+        open("/dev/null", O_RDWR);
+
+    }
     //Listen to messages
     int listen_status = listen(sock_fd, 10);
     if(listen_status)
