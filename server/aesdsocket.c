@@ -176,7 +176,7 @@ int main(int argc, char* argv[])
     if(listen_status)
     {
         perror("Listen Failed\n");
-        printf("Listen Failed\n");
+        //printf("Listen Failed\n");
         exit(0);
     }
     int file_fd=open(file_aesdsocket, O_WRONLY | O_CREAT | O_TRUNC, 0644); 
@@ -204,12 +204,12 @@ int main(int argc, char* argv[])
         if(sock_accept_fd == -1)
         {
             perror("Accept Failed");
-            printf("Accept Failed\n");
+            //printf("Accept Failed\n");
             exit(0);
         }
         else
         {
-            printf("Accept done\n");
+            //printf("Accept done\n");
             accepted = 1;
                 store_data = (char*)malloc(sizeof(char)*REC_LEN);
                 if(store_data == NULL)
@@ -229,21 +229,21 @@ int main(int argc, char* argv[])
         
         while (accepted)
         {
-            printf("In_ACCEPT\n");
+            //printf("In_ACCEPT\n");
             
             /* code */
             int i = 0;
             recv_len = recv(sock_accept_fd,(void*)rec_val,REC_LEN,0);
-            printf("recvlen:%d\n",recv_len);
+            //printf("recvlen:%d\n",recv_len);
             if(recv_len == -1)
             {
                 perror("recv_error");
-                printf("recv_error\n");
+                //printf("recv_error\n");
                 exit(1);
             }   
             else if(recv_len == 0)//Connection failed
             {
-                printf("In recvlen 0\n");
+                //printf("In recvlen 0\n");
                 accepted = 0;
                 total_length = 0;
                 break;
@@ -259,8 +259,8 @@ int main(int argc, char* argv[])
                 i++;    
             }
             //i++;
-            printf("i is:%d\n",i);
-            printf("length_is:%d\n",total_length);
+            //printf("i is:%d\n",i);
+            //printf("length_is:%d\n",total_length);
             
                 // if(REC_LEN - total_length >= i)
                 // {
@@ -294,13 +294,13 @@ int main(int argc, char* argv[])
                     printf("File opening failed\n");
                     exit(1);
                 }
-                printf("length is %d\n",total_length);
+                //printf("length is %d\n",total_length);
                 int nr = write(file_fd, store_data, total_length);
                 if(nr == -1)
 	            {
 		            //Log error if print failed
 		            syslog(LOG_ERR, "write is not sucessful");
-                    printf("Write_failed\n");
+                    //printf("Write_failed\n");
 		            close(file_fd);
 		            exit(1);
 	            }
@@ -315,7 +315,7 @@ int main(int argc, char* argv[])
 		            else
 		            {
 		        	    syslog(LOG_ERR, "Incorrect information written. Repeat the process");
-                        printf("Incorrect info written\n");
+                        //printf("Incorrect info written\n");
 		        	    close(file_fd);
 		        	    exit(1);
 		            }
@@ -323,7 +323,7 @@ int main(int argc, char* argv[])
                 close(file_fd);
 
                 file_length+=total_length;
-                printf("%d:file_length\n",file_length);
+                //printf("%d:file_length\n",file_length);
                 //total_length = 0;
                 char file_data[file_length];
                 file_fd = open(file_aesdsocket,O_RDONLY);
@@ -366,7 +366,7 @@ int main(int argc, char* argv[])
                 free(store_data);
                 close(file_fd);
 		        syslog(LOG_ERR, "Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
-                printf("Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
+                //printf("Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
             }
         }
     }       
