@@ -98,6 +98,7 @@ int main(int argc, char* argv[])
         exit(1);
     }
     int sock_accept_fd = 0;
+    hints.ai_family = AF_INET;
     hints.ai_flags = AI_PASSIVE;
     hints.ai_socktype = SOCK_STREAM;
     
