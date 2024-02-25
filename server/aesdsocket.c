@@ -58,7 +58,14 @@ int main(int argc, char* argv[])
 
     const char* service = "9000";
     openlog("socket_check",LOG_PID, LOG_USER);
-
+    if((argc>1) && strcmp(argv[1],"-d")==0)//Deamon mode entry
+    {
+        if(daemon(0,0)==-1)// set to daemon mode
+        {
+            syslog(LOG_ERR, "daemon mode failed");
+            exit(1);
+        }
+    }
     /*
  * Register signal_handler as our signal handler
  * for SIGINT.
