@@ -48,12 +48,12 @@ static void signal_handler(int signo)
 
 /**********DEFINES**********/
 #define REC_LEN 128
-
+#define FILE_DATA_LEN 1024
 int main(int argc, char* argv[])
 {
     //Receives data from the recv function
     char rec_val[REC_LEN];
-    int accepted = 0, data_sent_flag = 0;
+    int accepted = 0;//data_sent_flag = 0;
     int file_length = 0;
     int push_data = 0;
     int daemon_flag = 0;
@@ -63,15 +63,8 @@ int main(int argc, char* argv[])
     openlog("socket_check",LOG_PID, LOG_USER);
     if((argc>1) && strcmp(argv[1],"-d")==0)//Deamon mode entry
     {
-        if(daemon(0,0)==-1)// set to daemon mode
-        {
-            syslog(LOG_ERR, "daemon mode failed");
-            exit(EXIT_FAILURE);
-        }
-        else
-        {
-            daemon_flag = 1;
-        }
+       
+        daemon_flag = 1;
     }
 /*
  * Register signal_handler as our signal handler
@@ -312,7 +305,7 @@ int main(int argc, char* argv[])
                 close(file_fd);
                 //Incrementing file length so that the whole data is pushed
                 file_length+=total_length;
-                char file_data[file_length];
+                char file_data[FILE_DATA_LEN];
                 file_fd = open(file_aesdsocket,O_RDONLY);
                 if(file_fd == -1)
                 {
@@ -320,37 +313,45 @@ int main(int argc, char* argv[])
                     syslog(LOG_ERR, "Opening Failed");
                     exit(1);
                 }
-                int rd = read(file_fd,file_data,file_length);
+                int rd = 1;
+                while((rd = read(file_fd,file_data,sizeof(file_data))) > 0)
+                {
+                        if(rd == -1)
+                        {
+                            syslog(LOG_ERR,"unable to read data");
+                            printf("read_error\n");
+                            close(file_fd);
+                        }
+                        //close(file_fd);
+                        int data_sent = 0;//data_ptr_inc= 0;//length_tobe_sent = rd;
+                        //Used while to ensure if the total data is transferred to the client
+                        //while(data_sent_flag == 0)
+                        //{       
+                            data_sent = send(sock_accept_fd, file_data, rd, 0);
+                            if(data_sent == -1)
+                            {
+                                syslog(LOG_ERR,"Error in sending the data");
+                                printf("Send data failed\n");
+                            }
+                            //else if(data_sent < rd)
+                            //{
+                            //    data_ptr_inc+= data_sent;
+                            //    length_tobe_sent-=data_sent;
+                               //Repeat while loop
+                            //}
+                            //else if(data_sent == rd)
+                            //{
+                                //data_sent_flag = 1;
+                            //}
+                        //}
+                }
                 if(rd == -1)
                 {
-                    syslog(LOG_ERR,"unable to read data");
-                    printf("read_error\n");
+                    syslog(LOG_ERR,"unable to read file");
+                    printf("file_read_error\n");
                     close(file_fd);
                 }
-                close(file_fd);
-                int data_sent = 0,data_ptr_inc= 0,length_tobe_sent = file_length;
-                //Used while to ensure if the total data is transferred to the client
-                while(data_sent_flag == 0)
-                {       
-                    data_sent = send(sock_accept_fd, file_data+data_ptr_inc, length_tobe_sent, 0);
-                    if(data_sent == -1)
-                    {
-                        syslog(LOG_ERR,"Error in sending the data");
-                        printf("Send data failed\n");
-                        
-                    }
-                    else if(data_sent < file_length)
-                    {
-                        data_ptr_inc+= data_sent;
-                        length_tobe_sent-=data_sent;
-                       //Repeat while loop
-                    }
-                    else if(data_sent == file_length)
-                    {
-                        data_sent_flag = 1;
-                    }
-                }
-                data_sent_flag  = 0;
+                //data_sent_flag  = 0;
                 push_data = 0;
                 free(store_data);
                 close(file_fd);
