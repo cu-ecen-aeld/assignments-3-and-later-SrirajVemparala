@@ -1,6 +1,6 @@
 CC = $(CROSS_COMPILE)gcc
 
-FLAGS = -Wall -Werror
+FLAGS = -Wall -Werror -pthread -lrt
 
 .PHONY: all
 all: aesdsocket
