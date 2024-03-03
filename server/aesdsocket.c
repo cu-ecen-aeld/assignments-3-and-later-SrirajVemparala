@@ -35,18 +35,19 @@ const char* file_aesdsocket = "/var/tmp/aesdsocketdata";
 bool sig_trig = false;
 static void signal_handler(int signo)
 {
-    printf("In_sig_hand\n");
-    printf("%d\n",signo);
-    if(signo == SIGINT)
-    {
-        syslog(LOG_INFO,"SIGINT detected");
-    }
-    else if(signo == SIGTERM)
-    {
-        syslog(LOG_INFO,"SIGTERM detected");
-    }
+    // printf("In_sig_hand\n");
+    // printf("%d\n",signo);
+    // if(signo == SIGINT)
+    // {
+    //     syslog(LOG_INFO,"SIGINT detected");
+    // }
+    // else if(signo == SIGTERM)
+    // {
+    //     syslog(LOG_INFO,"SIGTERM detected");
+    // }
     sig_trig = true;
-    printf("sigtrig:%d\n",sig_trig);
+    //printf("sigtrig:%d\n",sig_trig);
+    //exit(EXIT_SUCCESS);
 }
 
 
@@ -345,7 +346,8 @@ int main(int argc, char* argv[])
         syslog(LOG_ERR, "Scoket Creation failed");
         exit(EXIT_FAILURE);
     }
-
+    int flags = fcntl(sock_fd, F_GETFL, 0);
+    fcntl(sock_fd, F_SETFL, flags | O_NONBLOCK);
     int sock_accept_fd = 0;
     hints.ai_family = AF_INET;
     hints.ai_flags = AI_PASSIVE;
@@ -472,13 +474,15 @@ int main(int argc, char* argv[])
     while(!sig_trig)
     {      
         //malloc performed
-        printf("Before_accept\n");
+        //printf("Before_accept\n");
         sock_accept_fd = accept(sock_fd, (struct sockaddr *)&their_addr, &addr_size);
+
         if(sock_accept_fd == -1)
         {
-            perror("Accept Failed");
-            syslog(LOG_ERR, "Unable to accept socket");
+            //perror("Accept Failed");
+            //syslog(LOG_ERR, "Unable to accept socket");
             //exit(0);
+            continue;
         }
         else
         {
@@ -553,7 +557,13 @@ int main(int argc, char* argv[])
         //unlink(file_aesdsocket);
         //exit(EXIT_SUCCESS);
     }
+    pthread_join(tid,NULL);
+    close(sock_accept_fd);
+    close(sock_fd);
+    pthread_mutex_destroy(&rec_lock);
+    shutdown(sock_fd, SHUT_RDWR);
     closelog();
+
     exit(EXIT_SUCCESS);
 
 }
