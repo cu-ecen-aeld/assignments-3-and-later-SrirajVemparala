@@ -248,55 +248,56 @@ void* thread_rec_data(void* thread_arg)
 		        //syslog(LOG_ERR, "Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
             }
     }
-     thread_info->thread_complete_flag = true;
+    thread_info->thread_complete_flag = true;
     close(thread_info->sock_accept_fd);
     return NULL;
 }
 
-// void* thread_time(void* threadarg)
-// {
-//   sleep(10);
-//      while (!sig_trig) {
-//         int file_fd;
-//         time_t current_time;
-//         struct tm *time_info;
-//         char timestamp_buffer[128];
+void* thread_time(void* threadarg)
+{
+     time_t current_time;
+     struct tm *time_info;
+     char timestamp_buffer[128];
 
-//         // Get current time
-//         current_time = time(NULL);
-//         time_info = localtime(&current_time);
+     sleep(10);
+     while (!sig_trig) {
+        int file_fd;   
+        
+        // Get current time
+        current_time = time(NULL);
+        time_info = localtime(&current_time);
 
-//         // Format timestamp
-//         strftime(timestamp_buffer, sizeof(timestamp_buffer), TIMESTAMP_FORMAT, time_info);
-//         pthread_mutex_lock(&rec_lock);
-//         // Open the file in append mode
-//         file_fd = open(file_aesdsocket, O_WRONLY | O_APPEND, 0644);
-//         if (file_fd == -1) {
-//             perror("Error opening file");
-//             return NULL;
-//         }
+        // Format timestamp
+        strftime(timestamp_buffer, sizeof(timestamp_buffer), TIMESTAMP_FORMAT, time_info);
+        pthread_mutex_lock(&rec_lock);
+        // Open the file in append mode
+        file_fd = open(file_aesdsocket, O_WRONLY | O_APPEND);
+        if (file_fd == -1) {
+            perror("Error opening file");
+            return NULL;
+        }
 
-//         // Append timestamp to file
-//         if (write(file_fd, "timestamp:", strlen("timestamp:")) == -1) {
-//             perror("Error writing to file");
-//             close(file_fd);
-//             return NULL;
-//         }
+        // Append timestamp to file
+        if (write(file_fd, "timestamp:", strlen("timestamp:")) == -1) {
+            perror("Error writing to file");
+            close(file_fd);
+            return NULL;
+        }
 
-//         if (write(file_fd, timestamp_buffer, strlen(timestamp_buffer)) == -1) {
-//             perror("Error writing to file");
-//             close(file_fd);
-//             return NULL;
-//         }
-//         // Close the file
-//         close(file_fd);
-//         pthread_mutex_unlock(&rec_lock);
-//         // Wait for 10 seconds
-//         sleep(10);
-//     }
-//     printf("Time_thread_complete\n");
-//     return NULL;
-// }
+        if (write(file_fd, timestamp_buffer, strlen(timestamp_buffer)) == -1) {
+            perror("Error writing to file");
+            close(file_fd);
+            return NULL;
+        }
+        // Close the file
+        close(file_fd);
+        pthread_mutex_unlock(&rec_lock);
+        // Wait for 10 seconds
+        sleep(10);
+    }
+    printf("Time_thread_complete\n");
+    return NULL;
+}
  
 int main(int argc, char* argv[])
 {
@@ -455,14 +456,14 @@ int main(int argc, char* argv[])
     //Rec messages
     addr_size = sizeof(their_addr);
     //memset(rec_val,0,REC_LEN);
-    // pthread_t tid;
-    // if(pthread_create(&tid, NULL, thread_time, NULL) != 0) 
-    // {
-    //             syslog(LOG_ERR, "Thread_creation _failed: %s", strerror(errno));
-    //             //return 1;
-    //             printf("thread_creation_failed\n");
-    // }
-    //
+    pthread_t tid;
+    if(pthread_create(&tid, NULL, thread_time, NULL) != 0) 
+    {
+                syslog(LOG_ERR, "Thread_creation _failed: %s", strerror(errno));
+                //return 1;
+                printf("thread_creation_failed\n");
+    }
+    
     //
     //Start of accepting the connections
     //
