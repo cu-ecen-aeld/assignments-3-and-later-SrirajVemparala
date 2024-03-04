@@ -33,6 +33,7 @@ int sock_fd;
 pthread_mutex_t rec_lock;
 const char* file_aesdsocket = "/var/tmp/aesdsocketdata";
 bool sig_trig = false;
+
 static void signal_handler(int signo)
 {
     // printf("In_sig_hand\n");
@@ -45,7 +46,7 @@ static void signal_handler(int signo)
     // {
     //     syslog(LOG_INFO,"SIGTERM detected");
     // }
-    sig_trig = true;
+    sig_trig = true;//Trigger signal handling for cleanup
     //printf("sigtrig:%d\n",sig_trig);
     //exit(EXIT_SUCCESS);
 }
@@ -54,7 +55,7 @@ static void signal_handler(int signo)
 /**********DEFINES**********/
 #define REC_LEN 128
 #define FILE_DATA_LEN 1024
-#define TIMESTAMP_FORMAT "%a, %d %b %Y %H:%M:%S %z\n"
+#define TIMESTAMP_FORMAT "%Y, %b %a %d %H:%M:%S\n"
 typedef struct thread_list{
 	pthread_t thread_id; 
 	int sock_accept_fd; 
@@ -73,11 +74,12 @@ SLIST_HEAD(head_thread_struct, thread_list) thread_head;
 
 void* thread_rec_data(void* thread_arg)
 {
-        int push_data = 0;
+    int push_data = 0;
     //uint32_t total_length = 0;
     int accepted = 1,file_fd = -1;
     uint32_t total_length = 0;
     char rec_val[REC_LEN];
+    memset(rec_val,0,REC_LEN);
     thread_list *thread_info = (thread_list*) thread_arg;
     char* store_data = (char*)malloc(sizeof(char)*REC_LEN);
     if(store_data == NULL)
@@ -93,8 +95,9 @@ void* thread_rec_data(void* thread_arg)
         //thread_info->thread_complete_flag = true;
         //printf("malloc_succ\n");
     }
-        int recv_len = 0;
-        
+    int recv_len = 0;
+    memset(store_data,0,REC_LEN);
+    //total_length = 0;    
     while (accepted)
     {   
             /* code */
@@ -220,17 +223,7 @@ void* thread_rec_data(void* thread_arg)
                                 close(thread_info->sock_accept_fd);
                                 return NULL;
                             }
-                            //else if(data_sent < rd)
-                            //{
-                            //    data_ptr_inc+= data_sent;
-                            //    length_tobe_sent-=data_sent;
-                               //Repeat while loop
-                            //}
-                            //else if(data_sent == rd)
-                            //{
-                                //data_sent_flag = 1;
-                            //}
-                        //}
+
                 }
                 if(rd == -1)
                 {
@@ -254,12 +247,14 @@ void* thread_rec_data(void* thread_arg)
     return NULL;
 }
 
+//I have referenced CHATGPT for obtaining the system wall clock time
+//Question asked was: How to obtain minutes and seconds from wall clock time to input for strftime() function
 void* thread_time(void* threadarg)
 {
      time_t current_time;
      struct tm *time_info;
      char timestamp_buffer[128];
-
+     memset(timestamp_buffer,0,128);
      sleep(10);
      while (!sig_trig) {
         int file_fd;   
@@ -270,6 +265,7 @@ void* thread_time(void* threadarg)
 
         // Format timestamp
         strftime(timestamp_buffer, sizeof(timestamp_buffer), TIMESTAMP_FORMAT, time_info);
+        printf("timestamp:%s\n",timestamp_buffer);
         pthread_mutex_lock(&rec_lock);
         // Open the file in append mode
         file_fd = open(file_aesdsocket, O_WRONLY | O_APPEND);
@@ -355,7 +351,7 @@ int main(int argc, char* argv[])
     int value = 1;
     //Accept
     struct sockaddr_storage their_addr;
-    socklen_t addr_size;
+    socklen_t addr_size = 0;
     // Set socket options for reusing address and port
     if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &value, sizeof(int)))
     {
@@ -458,7 +454,7 @@ int main(int argc, char* argv[])
     //Rec messages
     addr_size = sizeof(their_addr);
     //memset(rec_val,0,REC_LEN);
-    pthread_t tid;
+    pthread_t tid = 0;
     if(pthread_create(&tid, NULL, thread_time, NULL) != 0) 
     {
                 syslog(LOG_ERR, "Thread_creation _failed: %s", strerror(errno));
@@ -553,13 +549,14 @@ int main(int argc, char* argv[])
                     }
                     printf("In_thread_removal_if_sig\n");
                 }
-        close(sock_fd);   
-        //unlink(file_aesdsocket);
+
         //exit(EXIT_SUCCESS);
     }
+    //SIGHANDLING_EXIT_SEQ
+    close(sock_fd);   
+    unlink(file_aesdsocket);
     pthread_join(tid,NULL);
     close(sock_accept_fd);
-    close(sock_fd);
     pthread_mutex_destroy(&rec_lock);
     shutdown(sock_fd, SHUT_RDWR);
     closelog();
