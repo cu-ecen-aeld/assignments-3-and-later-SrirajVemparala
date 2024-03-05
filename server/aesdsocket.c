@@ -21,57 +21,296 @@
 #include <arpa/inet.h>
 #include <signal.h>
 #include <netinet/in.h>
-
-
+#include "queue.h"
 #include <arpa/inet.h>
+#include <stdbool.h>
+#include <pthread.h>
 /***********GLOBAL_VARIBLES*************/
 struct addrinfo hints;
 struct addrinfo* servinfo;
 struct sockaddr* socketaddr;
 int sock_fd;
+pthread_mutex_t rec_lock;
 const char* file_aesdsocket = "/var/tmp/aesdsocketdata";
+bool sig_trig = false;
 
 static void signal_handler(int signo)
 {
-    if(signo == SIGINT)
-    {
-        syslog(LOG_INFO,"SIGINT detected");
-    }
-    else if(signo == SIGTERM)
-    {
-        syslog(LOG_INFO,"SIGTERM detected");
-    }
-    close(sock_fd);
-    unlink(file_aesdsocket);
-    exit(EXIT_SUCCESS);
+    // printf("In_sig_hand\n");
+    // printf("%d\n",signo);
+    // if(signo == SIGINT)
+    // {
+    //     syslog(LOG_INFO,"SIGINT detected");
+    // }
+    // else if(signo == SIGTERM)
+    // {
+    //     syslog(LOG_INFO,"SIGTERM detected");
+    // }
+    sig_trig = true;//Trigger signal handling for cleanup
+    //printf("sigtrig:%d\n",sig_trig);
+    //exit(EXIT_SUCCESS);
 }
+
 
 /**********DEFINES**********/
 #define REC_LEN 128
+#define FILE_DATA_LEN 1024
+#define TIMESTAMP_FORMAT "%Y, %b %a %d %H:%M:%S\n"
+typedef struct thread_list{
+	pthread_t thread_id; 
+	int sock_accept_fd; 
+	bool thread_complete_flag;
+    struct sockaddr_storage client_addr; 
+    /*struct {								\
+	struct type *sle_next;	//next element 			\
+}*/
+	SLIST_ENTRY(thread_list) next; 
+}thread_list;
 
+/*struct head_thread_struct {								\
+	struct thread_list *slh_first; first element 		\
+}*/
+SLIST_HEAD(head_thread_struct, thread_list) thread_head;
+
+void* thread_rec_data(void* thread_arg)
+{
+    int push_data = 0;
+    //uint32_t total_length = 0;
+    int accepted = 1,file_fd = -1;
+    uint32_t total_length = 0;
+    char rec_val[REC_LEN];
+    memset(rec_val,0,REC_LEN);
+    thread_list *thread_info = (thread_list*) thread_arg;
+    char* store_data = (char*)malloc(sizeof(char)*REC_LEN);
+    if(store_data == NULL)
+    {
+        syslog(LOG_ERR,"Unable to allocate memory");
+        printf("malloc failed\n");
+        thread_info->thread_complete_flag = true;
+        return NULL;
+    }
+    else
+    {
+        syslog(LOG_DEBUG,"Successfully_created_file");
+        //thread_info->thread_complete_flag = true;
+        //printf("malloc_succ\n");
+    }
+    int recv_len = 0;
+    memset(store_data,0,REC_LEN);
+    //total_length = 0;    
+    while (accepted)
+    {   
+            /* code */
+            int i = 0;
+            recv_len = recv(thread_info->sock_accept_fd,(void*)rec_val,REC_LEN,0);
+            if(recv_len == -1)
+            {
+                perror("recv_error");
+                syslog(LOG_ERR, "Recv ERROR");
+                //printf("recv_error\n");
+                close(thread_info->sock_accept_fd);
+                thread_info->thread_complete_flag = true;
+                //close(thread_info->sock_accept_fd);
+                return NULL;
+            }   
+            else if(recv_len == 0)//Connection failed
+            {
+                //printf("In recvlen 0\n");
+                accepted = 0;
+                total_length = 0;
+                thread_info->thread_complete_flag = true;
+                close(thread_info->sock_accept_fd);
+                break;
+            }           
+            while(i < recv_len)
+            {
+                if(rec_val[i] == '\n')
+                {
+                    push_data = 1;
+                    i++;
+                    break;
+                }
+                i++;    
+            }
+            store_data = (char*)realloc(store_data,total_length+i);
+            memcpy(store_data+total_length,rec_val,i);
+            total_length+=i;
+                
+            memset(rec_val,0,recv_len);
+            if(recv_len !=0 && push_data == 1)
+            {
+                pthread_mutex_lock(&rec_lock);
+                //My data is stored in the buffer, now write it to the file file_aesdsocket
+                file_fd = open(file_aesdsocket,O_WRONLY|O_APPEND);
+                if(file_fd == -1)
+                {
+                    printf("File opening failed\n");
+                    syslog(LOG_ERR, "File opening failed");
+                    close(thread_info->sock_accept_fd);
+                    thread_info->thread_complete_flag = true;
+                    return NULL;
+                    //exit(EXIT_FAILURE);
+                }
+                //printf("length is %d\n",total_length);
+                int nr = write(file_fd, store_data, total_length);
+                if(nr == -1)
+	            {
+		            //Log error if print failed
+		            syslog(LOG_ERR, "write is not sucessful");
+                    //printf("Write_failed\n");
+		            close(file_fd);
+                    thread_info->thread_complete_flag = true;
+                    close(thread_info->sock_accept_fd);
+                    return NULL;
+		            //exit(EXIT_FAILURE);
+	            }
+	            else
+	            {
+	                //check if the whole string is written to the  file
+		            if(nr == total_length)
+		            {
+		                syslog(LOG_DEBUG, "Write_Success");
+		                //close(file_fd);
+		            }
+		            else
+		            {
+		        	    syslog(LOG_ERR, "Incorrect information written.Repeat the process");
+                        //printf("Incorrect info written\n");
+		        	    close(file_fd);
+                        thread_info->thread_complete_flag = true;
+                        close(thread_info->sock_accept_fd);
+                        return NULL;
+		        	    //exit(EXIT_FAILURE);
+		            }
+	            }
+                close(file_fd);
+                pthread_mutex_unlock(&rec_lock);
+                //Incrementing file length so that the whole data is pushed
+                char file_data[FILE_DATA_LEN];
+                pthread_mutex_lock(&rec_lock);
+                file_fd = open(file_aesdsocket,O_RDONLY);
+                if(file_fd == -1)
+                {
+                    printf("File opening failed\n");
+                    syslog(LOG_ERR, "Opening Failed");
+                    close(thread_info->sock_accept_fd);
+                    thread_info->thread_complete_flag = true;
+                    return NULL;
+                }
+                int rd = 1;
+                while((rd = read(file_fd,file_data,sizeof(file_data))) > 0)
+                {
+                        if(rd == -1)
+                        {
+                            syslog(LOG_ERR,"unable to read data");
+                            printf("read_error\n");
+                            close(file_fd);
+                            thread_info->thread_complete_flag = true;
+                            close(thread_info->sock_accept_fd);
+                            return NULL;
+                        }
+                        //close(file_fd);
+                        int data_sent = 0;//data_ptr_inc= 0;//length_tobe_sent = rd;
+                        //Used while to ensure if the total data is transferred to the client
+                        //while(data_sent_flag == 0)
+                        //{       
+                            data_sent = send(thread_info->sock_accept_fd, file_data, rd, 0);
+                            if(data_sent == -1)
+                            {
+                                syslog(LOG_ERR,"Error in sending the data");
+                                printf("Send data failed\n");
+                                thread_info->thread_complete_flag = true;
+                                close(thread_info->sock_accept_fd);
+                                return NULL;
+                            }
+
+                }
+                if(rd == -1)
+                {
+                    syslog(LOG_ERR,"unable to read file");
+                    printf("file_read_error\n");
+                     close(thread_info->sock_accept_fd);
+                    close(file_fd);
+                    return NULL;
+                }
+                //data_sent_flag  = 0;
+                push_data = 0;
+                free(store_data);
+                close(file_fd);
+                pthread_mutex_unlock(&rec_lock);
+                //Close the socket
+		        //syslog(LOG_ERR, "Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
+            }
+    }
+    thread_info->thread_complete_flag = true;
+    close(thread_info->sock_accept_fd);
+    return NULL;
+}
+
+//I have referenced CHATGPT for obtaining the system wall clock time
+//Question asked was: How to obtain minutes and seconds from wall clock time to input for strftime() function
+void* thread_time(void* threadarg)
+{
+     time_t current_time;
+     struct tm *time_info;
+     char timestamp_buffer[128];
+     memset(timestamp_buffer,0,128);
+     sleep(10);
+     while (!sig_trig) {
+        int file_fd;   
+        
+        // Get current time
+        current_time = time(NULL);
+        time_info = localtime(&current_time);
+
+        // Format timestamp
+        strftime(timestamp_buffer, sizeof(timestamp_buffer), TIMESTAMP_FORMAT, time_info);
+        printf("timestamp:%s\n",timestamp_buffer);
+        pthread_mutex_lock(&rec_lock);
+        // Open the file in append mode
+        file_fd = open(file_aesdsocket, O_WRONLY | O_APPEND);
+        if (file_fd == -1) {
+            perror("Error opening file");
+            return NULL;
+        }
+
+        // Append timestamp to file
+        if (write(file_fd, "timestamp:", strlen("timestamp:")) == -1) {
+            perror("Error writing to file");
+            close(file_fd);
+            return NULL;
+        }
+
+        if (write(file_fd, timestamp_buffer, strlen(timestamp_buffer)) == -1) {
+            perror("Error writing to file");
+            close(file_fd);
+            return NULL;
+        }
+        // Close the file
+        close(file_fd);
+        pthread_mutex_unlock(&rec_lock);
+        // Wait for 10 seconds
+        sleep(10);
+    }
+    printf("Time_thread_complete\n");
+    return NULL;
+}
+ 
 int main(int argc, char* argv[])
 {
-    //Receives data from the recv function
-    char rec_val[REC_LEN];
-    int accepted = 0, data_sent_flag = 0;
-    int file_length = 0;
-    int push_data = 0;
+
     int daemon_flag = 0;
     //Port ID
     const char* service = "9000";
     //Logging start
-    openlog("socket_check",LOG_PID, LOG_USER);
+    openlog(NULL,LOG_PID, LOG_USER);
+
+    //Initialize head to NULL
+    SLIST_INIT(&thread_head);
     if((argc>1) && strcmp(argv[1],"-d")==0)//Deamon mode entry
     {
-        if(daemon(0,0)==-1)// set to daemon mode
-        {
-            syslog(LOG_ERR, "daemon mode failed");
-            exit(EXIT_FAILURE);
-        }
-        else
-        {
-            daemon_flag = 1;
-        }
+       
+        daemon_flag = 1;
     }
 /*
  * Register signal_handler as our signal handler
@@ -103,16 +342,23 @@ int main(int argc, char* argv[])
         syslog(LOG_ERR, "Scoket Creation failed");
         exit(EXIT_FAILURE);
     }
-
+    int flags = fcntl(sock_fd, F_GETFL, 0);
+    fcntl(sock_fd, F_SETFL, flags | O_NONBLOCK);
     int sock_accept_fd = 0;
     hints.ai_family = AF_INET;
     hints.ai_flags = AI_PASSIVE;
     hints.ai_socktype = SOCK_STREAM;
-    
+    int value = 1;
     //Accept
     struct sockaddr_storage their_addr;
-    socklen_t addr_size;
-    
+    socklen_t addr_size = 0;
+    // Set socket options for reusing address and port
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &value, sizeof(int)))
+    {
+      printf("Failed to set socket options:%s\n", strerror(errno));
+      syslog(LOG_ERR, "Failed to set socket options:%s\n", strerror(errno));
+      return -1;
+    }
     //Set the socket to an IP address
     int status = getaddrinfo(NULL,service,&hints,&servinfo);
     if(status != 0)
@@ -134,6 +380,14 @@ int main(int argc, char* argv[])
     }
     //Free servinfo
     freeaddrinfo(servinfo);
+    if (pthread_mutex_init(&rec_lock, NULL) != 0) 
+    {
+        // Mutex initialization failed
+         syslog(LOG_ERR, "Mutex_init_failed");
+         printf("Mutex_init_failed\n");
+         exit(EXIT_FAILURE);
+        // Handle error
+    }
     /*Referenced from CHAT Gpt with the question
         How to make my process a Daemon?*/
     if(daemon_flag == 1)
@@ -199,165 +453,114 @@ int main(int argc, char* argv[])
     close(file_fd);
     //Rec messages
     addr_size = sizeof(their_addr);
-    memset(rec_val,0,REC_LEN);
-    uint32_t total_length = 0;
-    //
+    //memset(rec_val,0,REC_LEN);
+    pthread_t tid = 0;
+    if(pthread_create(&tid, NULL, thread_time, NULL) != 0) 
+    {
+                syslog(LOG_ERR, "Thread_creation _failed: %s", strerror(errno));
+                //return 1;
+                printf("thread_creation_failed\n");
+    }
+    
     //
     //Start of accepting the connections
     //
-    //
-    
-    while(1)
+    // 
+    int threads_created  = 0; //Debug variable
+    while(!sig_trig)
     {      
         //malloc performed
-        char *store_data = NULL;
+        //printf("Before_accept\n");
         sock_accept_fd = accept(sock_fd, (struct sockaddr *)&their_addr, &addr_size);
+
         if(sock_accept_fd == -1)
         {
-            perror("Accept Failed");
-            syslog(LOG_ERR, "Unable to accept socket");
-            exit(0);
+            //perror("Accept Failed");
+            //syslog(LOG_ERR, "Unable to accept socket");
+            //exit(0);
+            continue;
         }
         else
         {
-            
-            accepted = 1;
-                store_data = (char*)malloc(sizeof(char)*REC_LEN);
-                if(store_data == NULL)
-                {
-                    syslog(LOG_ERR,"Unable to allocate memory");
-                    printf("malloc failed\n");
-                    exit(1);
-                }
-                else
-                {
-                    syslog(LOG_DEBUG,"Successfully_created_file");
-                    //printf("malloc_succ\n");
-                }
-                syslog(LOG_INFO, "Accepts connection from %s", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
-        }
-        int recv_len = 0;
+            thread_list *new_thread = (thread_list*)malloc(sizeof(thread_list));
+            if(new_thread == NULL)
+            {
+                 syslog(LOG_ERR,"Unable to allocate memory");
+                printf("Nospace avaialble\n");
         
-        while (accepted)
-        {   
-            /* code */
-            int i = 0;
-            recv_len = recv(sock_accept_fd,(void*)rec_val,REC_LEN,0);
-            if(recv_len == -1)
-            {
-                perror("recv_error");
-                syslog(LOG_ERR, "Recv ERROR");
-                //printf("recv_error\n");
-                exit(EXIT_FAILURE);
-            }   
-            else if(recv_len == 0)//Connection failed
-            {
-                //printf("In recvlen 0\n");
-                accepted = 0;
-                total_length = 0;
-                break;
-            }           
-            while(i < recv_len)
-            {
-                if(rec_val[i] == '\n')
-                {
-                    push_data = 1;
-                    i++;
-                    break;
-                }
-                i++;    
+        //exit(1);
             }
-            store_data = (char*)realloc(store_data,total_length+i);
-            memcpy(store_data+total_length,rec_val,i);
-            total_length+=i;
-                
-            memset(rec_val,0,recv_len);
-            if(recv_len !=0 && push_data == 1)
+            else
             {
+                syslog(LOG_DEBUG,"Successfully_created_file");
+                printf("malloc_succ\n");
+            }   
+            new_thread->sock_accept_fd = sock_accept_fd;
+            if(pthread_create(&(new_thread->thread_id), NULL, thread_rec_data, (void *)new_thread) != 0) 
+            {
+                syslog(LOG_ERR, "Thread_creation _failed: %s", strerror(errno));
+                //return 1;
+                printf("Error with thread creationnnn\n");
+                free(new_thread);
+            }
+            else
+            {
+                threads_created++;
+                SLIST_INSERT_HEAD(&thread_head, new_thread, next);
                 
-                //My data is stored in the buffer, now write it to the file file_aesdsocket
-                file_fd = open(file_aesdsocket,O_WRONLY|O_APPEND);
-                if(file_fd == -1)
-                {
-                    printf("File opening failed\n");
-                    syslog(LOG_ERR, "File opening failed");
-                    exit(EXIT_FAILURE);
-                }
-                //printf("length is %d\n",total_length);
-                int nr = write(file_fd, store_data, total_length);
-                if(nr == -1)
-	            {
-		            //Log error if print failed
-		            syslog(LOG_ERR, "write is not sucessful");
-                    //printf("Write_failed\n");
-		            close(file_fd);
-		            exit(EXIT_FAILURE);
-	            }
-	            else
-	            {
-	                //check if the whole string is written to the  file
-		            if(nr == total_length)
-		            {
-		                syslog(LOG_DEBUG, "Write_Success");
-		                //close(file_fd);
-		            }
-		            else
-		            {
-		        	    syslog(LOG_ERR, "Incorrect information written.Repeat the process");
-                        //printf("Incorrect info written\n");
-		        	    close(file_fd);
-		        	    exit(EXIT_FAILURE);
-		            }
-	            }
-                close(file_fd);
-                //Incrementing file length so that the whole data is pushed
-                file_length+=total_length;
-                char file_data[file_length];
-                file_fd = open(file_aesdsocket,O_RDONLY);
-                if(file_fd == -1)
-                {
-                    printf("File opening failed\n");
-                    syslog(LOG_ERR, "Opening Failed");
-                    exit(1);
-                }
-                int rd = read(file_fd,file_data,file_length);
-                if(rd == -1)
-                {
-                    syslog(LOG_ERR,"unable to read data");
-                    printf("read_error\n");
-                    close(file_fd);
-                }
-                close(file_fd);
-                int data_sent = 0,data_ptr_inc= 0,length_tobe_sent = file_length;
-                //Used while to ensure if the total data is transferred to the client
-                while(data_sent_flag == 0)
-                {       
-                    data_sent = send(sock_accept_fd, file_data+data_ptr_inc, length_tobe_sent, 0);
-                    if(data_sent == -1)
-                    {
-                        syslog(LOG_ERR,"Error in sending the data");
-                        printf("Send data failed\n");
-                        
-                    }
-                    else if(data_sent < file_length)
-                    {
-                        data_ptr_inc+= data_sent;
-                        length_tobe_sent-=data_sent;
-                       //Repeat while loop
-                    }
-                    else if(data_sent == file_length)
-                    {
-                        data_sent_flag = 1;
-                    }
-                }
-                data_sent_flag  = 0;
-                push_data = 0;
-                free(store_data);
-                close(file_fd);
-                //Close the socket
-		        syslog(LOG_ERR, "Closed connection with %s\n", inet_ntoa(((struct sockaddr_in*)&their_addr)->sin_addr));
+            //create pthread store thread id in the               
             }
         }
-    }       
+        thread_list* node,*next_val;
+                SLIST_FOREACH_SAFE(node, &thread_head, next, next_val)
+                {
+				    if(node -> thread_complete_flag)
+                    {
+                        printf("At_join_in_while\n");
+				        pthread_join(node->thread_id,NULL); 
+                        SLIST_REMOVE(&thread_head, node, thread_list, next);
+                        free(node);
+                        threads_created--;
+                        printf("remaining_threads:%d\n",threads_created);
+                    }
+                    printf("In_thread_removal_out\n");
+                }
+        
+                //data_sent_flag  = 0;
+                //push_data = 0;
+        printf("In_while_sig\n"); 
+    }
+    printf("Iamout\n"); 
+    if(sig_trig)
+    {
+        printf("At_join_in_sig\n");
+        //pthread_join(tid,NULL);
+        thread_list* node,*next_val;
+                SLIST_FOREACH_SAFE(node, &thread_head, next, next_val)
+                {
+				    if(node -> thread_complete_flag)
+                    {
+                        printf("At_join_in_sig\n");
+				        pthread_join(node->thread_id,NULL); 
+                        SLIST_REMOVE(&thread_head, node, thread_list, next);
+                        free(node);
+                        threads_created--;
+                        printf("remaining_threads:%d\n",threads_created);
+                    }
+                    printf("In_thread_removal_if_sig\n");
+                }
+
+        //exit(EXIT_SUCCESS);
+    }
+    //SIGHANDLING_EXIT_SEQ
+    close(sock_fd);   
+    unlink(file_aesdsocket);
+    pthread_join(tid,NULL);
+    close(sock_accept_fd);
+    pthread_mutex_destroy(&rec_lock);
+    shutdown(sock_fd, SHUT_RDWR);
+    closelog();
+
+    exit(EXIT_SUCCESS);
 
 }
