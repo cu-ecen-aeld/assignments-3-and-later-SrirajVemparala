@@ -1,4 +1,4 @@
-# Analysis of Kernel Oops with Faulty Write Function
+# Analysis of Kernel Oops
 
 ## Introduction
 This file discusses issue caused by executing `echo "hello_world" > /dev/faulty` in a Linux system. Kernel log captured the error.
