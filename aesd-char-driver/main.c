@@ -131,7 +131,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     }
     for( j = 0;j<count;j++)
     {
-        PDEBUG("bufdata %cand_count%zu\n",buf[j],count);
+        PDEBUG("write:bufdata %c and_count%zu\n",buf[j],count);
     }
     //That means it is a new data
     if(dev->buff_len == 0)
@@ -175,7 +175,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->buff_len += count;
         for( j = 0;j<dev->buff_len;j++)
         {
-            PDEBUG("In reall write %cand_index%zu\n",dev->write_buff[j],dev->buff_len);
+            PDEBUG("write:In reall write %c and index:%zu\n",dev->write_buff[j],dev->buff_len);
         }
     }
     //copy_from_user(dev->write_buff, buf, count);
@@ -197,7 +197,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         entry_buffer.buffptr = dev->write_buff;
         entry_buffer.size = dev->buff_len;
         ret_add_entry = aesd_circular_buffer_add_entry(&dev->cir_buf, &entry_buffer);
-        retval = dev->buff_len;
+        retval = count;
         dev->buff_len = 0;//Data received /n.
         send_data_to_cb = 0;
         
@@ -207,6 +207,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         kfree(ret_add_entry);
     }
 exit_write:
+    PDEBUG("write:Ret_val is:%zu\n",retval);
     mutex_unlock(&dev->lock);
     return retval;
 }
