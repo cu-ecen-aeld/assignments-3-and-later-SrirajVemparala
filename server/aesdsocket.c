@@ -25,13 +25,19 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <pthread.h>
+
+#define USE_AESD_CHAR_DEVICE
 /***********GLOBAL_VARIBLES*************/
 struct addrinfo hints;
 struct addrinfo* servinfo;
 struct sockaddr* socketaddr;
 int sock_fd;
 pthread_mutex_t rec_lock;
+#ifdef USE_AESD_CHAR_DEVICE
+const char* file_aesdsocket = "/dev/aesdchar";
+#else
 const char* file_aesdsocket = "/var/tmp/aesdsocketdata";
+#endif
 bool sig_trig = false;
 
 static void signal_handler(int signo)
@@ -246,7 +252,7 @@ void* thread_rec_data(void* thread_arg)
     close(thread_info->sock_accept_fd);
     return NULL;
 }
-
+#ifndef USE_AESD_CHAR_DEVICE
 //I have referenced CHATGPT for obtaining the system wall clock time
 //Question asked was: How to obtain minutes and seconds from wall clock time to input for strftime() function
 void* thread_time(void* threadarg)
@@ -295,7 +301,7 @@ void* thread_time(void* threadarg)
     printf("Time_thread_complete\n");
     return NULL;
 }
- 
+#endif
 int main(int argc, char* argv[])
 {
 
@@ -444,7 +450,7 @@ int main(int argc, char* argv[])
         //printf("Listen Failed\n");
         exit(EXIT_FAILURE);
     }
-    int file_fd=open(file_aesdsocket, O_WRONLY | O_CREAT | O_TRUNC, 0644); 
+    int file_fd=open(file_aesdsocket, O_WRONLY | O_TRUNC, 0666); 
         if (file_fd==-1)
         {
                 perror("open");
@@ -454,6 +460,7 @@ int main(int argc, char* argv[])
     //Rec messages
     addr_size = sizeof(their_addr);
     //memset(rec_val,0,REC_LEN);
+    #ifndef USE_AESD_CHAR_DEVICE
     pthread_t tid = 0;
     if(pthread_create(&tid, NULL, thread_time, NULL) != 0) 
     {
@@ -461,7 +468,7 @@ int main(int argc, char* argv[])
                 //return 1;
                 printf("thread_creation_failed\n");
     }
-    
+    #endif
     //
     //Start of accepting the connections
     //
@@ -485,7 +492,7 @@ int main(int argc, char* argv[])
             thread_list *new_thread = (thread_list*)malloc(sizeof(thread_list));
             if(new_thread == NULL)
             {
-                 syslog(LOG_ERR,"Unable to allocate memory");
+                syslog(LOG_ERR,"Unable to allocate memory");
                 printf("Nospace avaialble\n");
         
         //exit(1);
@@ -554,8 +561,10 @@ int main(int argc, char* argv[])
     }
     //SIGHANDLING_EXIT_SEQ
     close(sock_fd);   
-    unlink(file_aesdsocket);
+    #ifndef USE_AESD_CHAR_DEVICE
+    unlink(file_aesdsocket);  
     pthread_join(tid,NULL);
+    #endif
     close(sock_accept_fd);
     pthread_mutex_destroy(&rec_lock);
     shutdown(sock_fd, SHUT_RDWR);
